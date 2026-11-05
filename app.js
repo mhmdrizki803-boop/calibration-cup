@@ -52,6 +52,10 @@
     let round = 0;
     let judgments = [];      // { model, judgment } for the round in flight
     let lastTruth = null;
+    // One button drives the whole loop, so it needs one handler and an explicit state.
+    // Binding both addEventListener and onclick fired runRound() *and* the advance
+    // handler, which re-ran the previous scenario while the round counter moved on.
+    let phase = "idle";      // idle → judging → awaitingReferee → resolved
 
     const key = () => {
         const c = document.querySelector("polli-connect");
@@ -93,6 +97,7 @@
         el("scores").innerHTML = "";
         judgments = [];
         lastTruth = null;
+        phase = "idle";
         status("");
         el("run").disabled = false;
         el("run").textContent = "Ask the models";
@@ -127,6 +132,7 @@
         if (!apiKey) { status("Approve a Pollinations key first — press Connect below.", "err"); return; }
         if (!models.length) { status("No models selected.", "err"); return; }
 
+        phase = "judging";
         el("run").disabled = true;
         el("cards").innerHTML = "";
         el("referee").style.display = "none";
@@ -153,8 +159,14 @@
             }
         });
 
-        if (!judgments.length) { status("Every model failed this round.", "err"); el("run").disabled = false; return; }
-        status(`Both judgments in. Now YOU decide what actually happened.`, "ok");
+        if (!judgments.length) {
+            status("Every model failed this round.", "err");
+            phase = "idle";
+            el("run").disabled = false;
+            return;
+        }
+        phase = "awaitingReferee";
+        status("Both judgments in. Now YOU decide what actually happened.", "ok");
 
         // The player is the referee: the truth is whatever they say it is.
         const ro = el("refereeOptions");
@@ -163,6 +175,7 @@
             const b = document.createElement("button");
             b.className = "opt";
             b.textContent = o.text;
+            b.disabled = false;
             b.addEventListener("click", () => resolveRound(o.key));
             ro.appendChild(b);
         }
@@ -170,8 +183,10 @@
     }
 
     function resolveRound(truthKey) {
-        if (lastTruth) return;
+        if (lastTruth || phase !== "awaitingReferee") return;
         lastTruth = truthKey;
+        phase = "resolved";
+        el("run").disabled = true;
         const r = ROUNDS[round % ROUNDS.length];
         const b = board();
         const out = el("scores");
@@ -191,9 +206,16 @@
         saveBoard(b);
         renderLeaderboard();
         el("refereeOptions").innerHTML = '<div class="muted">Round closed.</div>';
+        phase = "resolved";
         el("run").textContent = "Next round";
         el("run").disabled = false;
-        el("run").onclick = () => { round += 1; renderRound(); el("run").onclick = runRound; };
+    }
+
+    // The single driver for the button.
+    function onRun() {
+        if (phase === "judging" || phase === "awaitingReferee") return;   // busy: ignore
+        if (phase === "resolved") { round += 1; renderRound(); }          // advance, then ask
+        runRound();
     }
 
     function renderPicker() {
@@ -210,7 +232,7 @@
 
     function reset() { localStorage.removeItem(BOARD_STORE); renderLeaderboard(); }
 
-    el("run").addEventListener("click", runRound);
+    el("run").addEventListener("click", onRun);
     el("reset").addEventListener("click", reset);
     renderPicker();
     renderLeaderboard();
