@@ -137,6 +137,8 @@
         el("cards").innerHTML = "";
         el("referee").style.display = "none";
         el("scores").innerHTML = "";
+        el("roundCard").style.display = "none";
+        el("roundCard").style.display = "none";
         status(`Asking ${models.length} decision models…`);
 
         const settled = await Promise.allSettled(models.map((m) => D.judge(m.id, r.scenario, r.options, apiKey)));
@@ -190,6 +192,7 @@
         const r = ROUNDS[round % ROUNDS.length];
         const b = board();
         const out = el("scores");
+        el("roundCard").style.display = "block";
         out.innerHTML = '<div class="seclabel">Round score — Brier, lower is better</div>';
         for (const { model, j } of judgments) {
             const s = D.brier(j.probabilities, r.options, truthKey);
